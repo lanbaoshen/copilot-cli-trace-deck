@@ -24,7 +24,7 @@ Render GitHub Copilot CLI agent debug logs into a clear, inspectable trace view.
 Run the app directly from the workspace with `uv`:
 
 ```bash
-uv run copilot-cli-trace-deck
+uvx copilot-cli-trace-deck@latest
 ```
 
 By default the server listens on `http://127.0.0.1:9887` and opens that URL in your browser.
@@ -36,13 +36,13 @@ The summary view also estimates per-session GitHub AI Credits / USD cost from sh
 You can also pass the session-state source and server options:
 
 ```bash
-uv run copilot-cli-trace-deck ~/.copilot/session-state --host 127.0.0.1 --port 9887
+uvx copilot-cli-trace-deck ~/.copilot/session-state --host 127.0.0.1 --port 9887
 ```
 
 To skip opening a browser while still printing the local URL:
 
 ```bash
-uv run copilot-cli-trace-deck --quiet
+uvx copilot-cli-trace-deck --quiet
 ```
 
 ## Install As A Command
