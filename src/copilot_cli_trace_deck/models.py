@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 
 
 @dataclass(frozen=True)
 class SessionPreview:
     session_id: str
     title: str
+    status: str = ""
+    model_name: str = ""
+    repository: str = ""
+    branch: str = ""
+    updated_label: str = ""
     is_active: bool = False
 
 
@@ -27,8 +33,25 @@ class SessionSummary:
     total_input_tokens: int
     total_output_tokens: int
     total_cached_input_tokens: int
+    total_cache_write_tokens: int
     total_tokens: int
+    estimated_cost_usd: Decimal | None
+    estimated_ai_credits: Decimal | None
+    billing_note: str
+    models_used_label: str
+    model_usages: list["SessionModelUsage"]
     error_count: int
+
+
+@dataclass(frozen=True)
+class SessionModelUsage:
+    model_name: str
+    input_tokens: int
+    cached_input_tokens: int
+    cache_write_tokens: int
+    output_tokens: int
+    total_tokens: int
+    estimated_cost_usd: Decimal | None
 
 
 @dataclass(frozen=True)

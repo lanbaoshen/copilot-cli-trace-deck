@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+from decimal import Decimal
 
 from ..models import SessionFlowNode, SessionLogEntry, SessionLogSection, SessionPreview, SessionSummary
 
@@ -199,6 +200,13 @@ def render_document(page_title: str, body: str) -> str:
         min-width: 0;
       }}
 
+      .session-copy {{
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }}
+
       .session-title {{
         margin: 0;
         font-size: clamp(0.96rem, 1.2vw, 1.28rem);
@@ -209,6 +217,20 @@ def render_document(page_title: str, body: str) -> str:
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+      }}
+
+      .session-meta {{
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        color: #8d97a6;
+        font-size: 0.84rem;
+        line-height: 1.35;
+        letter-spacing: -0.015em;
+      }}
+
+      .session-meta-item {{
+        white-space: nowrap;
       }}
 
       .icon {{
@@ -338,13 +360,13 @@ def render_document(page_title: str, body: str) -> str:
 
       .card-grid {{
         display: grid;
-        grid-template-columns: repeat(6, minmax(180px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
         gap: 18px;
       }}
 
       .stat-card {{
         min-height: 102px;
-        padding: 20px 24px 18px;
+        padding: 20px 18px 18px;
         border: 1px solid var(--line);
         border-radius: 12px;
         background: rgba(9, 13, 20, 0.68);
@@ -354,12 +376,11 @@ def render_document(page_title: str, body: str) -> str:
       .stat-label {{
         display: block;
         color: var(--muted);
-        font-size: 0.9rem;
+        font-size: clamp(0.76rem, 0.72rem + 0.18vw, 0.88rem);
         line-height: 1.25;
         font-weight: 600;
+        letter-spacing: -0.02em;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }}
 
       .stat-value {{
@@ -371,6 +392,75 @@ def render_document(page_title: str, body: str) -> str:
         font-weight: 400;
         font-variant-numeric: tabular-nums;
         color: var(--text);
+      }}
+
+      .billing-note {{
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 0.94rem;
+        line-height: 1.5;
+      }}
+
+      .model-usage-panel {{
+        margin-top: 18px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(9, 13, 20, 0.68);
+        overflow: hidden;
+      }}
+
+      .model-usage-title {{
+        padding: 16px 18px 0;
+        color: var(--text);
+        font-size: 0.96rem;
+        line-height: 1.3;
+        font-weight: 600;
+      }}
+
+      .model-usage-scroller {{
+        overflow-x: auto;
+        padding: 12px 18px 18px;
+      }}
+
+      .model-usage-table {{
+        width: 100%;
+        min-width: 760px;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }}
+
+      .model-usage-table th,
+      .model-usage-table td {{
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        text-align: left;
+      }}
+
+      .model-usage-table th {{
+        color: var(--muted);
+        font-size: 0.82rem;
+        line-height: 1.2;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }}
+
+      .model-usage-table tbody tr:last-child td {{
+        border-bottom: 0;
+      }}
+
+      .model-usage-table td {{
+        color: var(--text);
+        font-size: 0.95rem;
+        line-height: 1.35;
+        font-weight: 500;
+      }}
+
+      .model-usage-empty {{
+        padding: 16px 18px 18px;
+        color: var(--muted);
+        font-size: 0.94rem;
+        line-height: 1.5;
       }}
 
       .action-row {{
@@ -525,6 +615,45 @@ def build_index_page(session_previews: list[SessionPreview]) -> str:
           let isPolling = false;
           let lastMarkup = sessionList ? sessionList.innerHTML.trim() : '';
 
+          function parseSessionItems(markup) {{
+            const template = document.createElement('template');
+            template.innerHTML = '<ul>' + markup + '</ul>';
+            return Array.from(template.content.querySelectorAll('li[data-session-id]'));
+          }}
+
+          function syncSessionList(markup) {{
+            if (!sessionList) {{
+              return;
+            }}
+
+            const nextItems = parseSessionItems(markup);
+            const existingItems = new Map(
+              Array.from(sessionList.querySelectorAll('li[data-session-id]')).map((item) => [item.dataset.sessionId || '', item]),
+            );
+
+            nextItems.forEach((nextItem, index) => {{
+              const sessionId = nextItem.dataset.sessionId || '';
+              const currentItem = existingItems.get(sessionId);
+              let itemToPlace = nextItem;
+
+              if (currentItem) {{
+                existingItems.delete(sessionId);
+                if (currentItem.outerHTML === nextItem.outerHTML) {{
+                  itemToPlace = currentItem;
+                }} else {{
+                  currentItem.replaceWith(nextItem);
+                }}
+              }}
+
+              const currentAtIndex = sessionList.children[index] || null;
+              if (itemToPlace !== currentAtIndex) {{
+                sessionList.insertBefore(itemToPlace, currentAtIndex);
+              }}
+            }});
+
+            existingItems.forEach((item) => item.remove());
+          }}
+
           async function refreshIndex() {{
             if (isPolling || document.hidden || !sessionList) {{
               return;
@@ -545,7 +674,7 @@ def build_index_page(session_previews: list[SessionPreview]) -> str:
                 return;
               }}
 
-              sessionList.innerHTML = itemsHtml;
+              syncSessionList(itemsHtml);
               lastMarkup = itemsHtml;
             }} catch (_error) {{
               return;
@@ -599,6 +728,7 @@ def build_index_page(session_previews: list[SessionPreview]) -> str:
 def build_session_page(summary: SessionSummary) -> str:
     title = html.escape(summary.title)
     detail_meta = build_session_detail_meta(summary)
+    stat_labels = build_summary_stat_labels(summary)
     body = f"""
     <main class="page detail-page">
       <div class="shell app-shell detail-shell">
@@ -635,11 +765,18 @@ def build_session_page(summary: SessionSummary) -> str:
             <div class="card-grid">
               {render_stat_card('Model Turns', summary.model_turns, value_id='session-model-turns-value')}
               {render_stat_card('Tool Calls', summary.tool_calls, value_id='session-tool-calls-value')}
-              {render_stat_card('Total Input Tokens', summary.total_input_tokens, value_id='session-total-input-value')}
+              {render_stat_card(stat_labels['totalInputLabel'], summary.total_input_tokens, value_id='session-total-input-value', label_id='session-total-input-label')}
               {render_stat_card('Total Output Tokens', summary.total_output_tokens, value_id='session-total-output-value')}
-              {render_stat_card('Total Cached Input Tokens', summary.total_cached_input_tokens, value_id='session-total-cached-input-value')}
+              {render_stat_card(stat_labels['totalCachedInputLabel'], summary.total_cached_input_tokens, value_id='session-total-cached-input-value', label_id='session-total-cached-input-label')}
+              {render_stat_card(stat_labels['totalCacheWriteLabel'], summary.total_cache_write_tokens, value_id='session-total-cache-write-value', label_id='session-total-cache-write-label')}
               {render_stat_card('Total Tokens', summary.total_tokens, value_id='session-total-tokens-value')}
+              {render_stat_card('Estimated AI Credits', format_ai_credits(summary.estimated_ai_credits), value_id='session-estimated-ai-credits-value')}
+              {render_stat_card('Estimated Cost (USD)', format_currency(summary.estimated_cost_usd), value_id='session-estimated-cost-usd-value')}
               {render_stat_card('Errors', summary.error_count, value_id='session-error-count-value')}
+            </div>
+            <p class="billing-note" id="session-billing-note">{html.escape(summary.billing_note)}</p>
+            <div class="model-usage-panel" id="session-model-usage-breakdown">
+              {render_model_usage_breakdown(summary)}
             </div>
           </div>
 
@@ -667,6 +804,13 @@ def build_session_page(summary: SessionSummary) -> str:
             }}
           }}
 
+          function setHTML(id, value) {{
+            const node = document.getElementById(id);
+            if (node) {{
+              node.innerHTML = value;
+            }}
+          }}
+
           async function refreshSummary() {{
             if (isPolling || document.hidden) {{
               return;
@@ -688,13 +832,21 @@ def build_session_page(summary: SessionSummary) -> str:
               setText('session-status-value', summary.status || '');
               setText('session-created-value', summary.createdLabel || '');
               setText('session-updated-value', summary.updatedLabel || '');
+              setText('session-total-input-label', summary.totalInputLabel || 'Total Input Tokens');
+              setText('session-total-cached-input-label', summary.totalCachedInputLabel || 'Total Cached Input Tokens');
+              setText('session-total-cache-write-label', summary.totalCacheWriteLabel || 'Total Cache Write Tokens');
               setText('session-model-turns-value', summary.modelTurns || '0');
               setText('session-tool-calls-value', summary.toolCalls || '0');
               setText('session-total-input-value', summary.totalInputTokens || '0');
               setText('session-total-output-value', summary.totalOutputTokens || '0');
               setText('session-total-cached-input-value', summary.totalCachedInputTokens || '0');
+              setText('session-total-cache-write-value', summary.totalCacheWriteTokens || '0');
               setText('session-total-tokens-value', summary.totalTokens || '0');
+              setText('session-estimated-ai-credits-value', summary.estimatedAiCredits || '-');
+              setText('session-estimated-cost-usd-value', summary.estimatedCostUsd || '-');
               setText('session-error-count-value', summary.errorCount || '0');
+              setText('session-billing-note', summary.billingNote || '');
+              setHTML('session-model-usage-breakdown', summary.modelUsageBreakdownHtml || '');
             }} catch (_error) {{
               return;
             }} finally {{
@@ -2123,31 +2275,65 @@ def render_session_list_markup(session_previews: list[SessionPreview]) -> str:
     return "\n".join(render_session_item(session) for session in session_previews)
 
 
+def build_session_preview_meta(session: SessionPreview) -> str:
+    items: list[str] = []
+    if session.repository:
+        items.append(session.repository)
+    if session.branch:
+        items.append(session.branch)
+    if session.model_name:
+        items.append(session.model_name)
+
+    if session.updated_label:
+        items.append(f"Updated {session.updated_label}")
+
+    return "".join(f'<span class="session-meta-item">{html.escape(item)}</span>' for item in items)
+
+
 def render_session_item(session: SessionPreview) -> str:
     title = html.escape(session.title)
     badge = '<span class="badge">Active</span>' if session.is_active else ""
+    meta = build_session_preview_meta(session)
     return f"""
-          <li>
+          <li data-session-id="{html.escape(session.session_id, quote=True)}">
             <a class="session-link" href="/sessions/{session.session_id}" aria-label="Open {title}">
               <div class="session-main">
                 {chat_icon()}
-                <p class="session-title">{title}</p>
+                <div class="session-copy">
+                  <p class="session-title">{title}</p>
+                  <div class="session-meta">{meta}</div>
+                </div>
               </div>
               {badge}
             </a>
           </li>"""
 
 
-def render_stat_card(label: str, value: int, value_id: str | None = None) -> str:
-  return render_live_stat_card(label, value, value_id=value_id)
+def build_summary_stat_labels(summary: SessionSummary) -> dict[str, str]:
+    if summary.status == "Active":
+        return {
+            "totalInputLabel": "Input Tokens (Finalized)",
+            "totalCachedInputLabel": "Cached Input (Finalized)",
+            "totalCacheWriteLabel": "Cache Write (Finalized)",
+        }
+    return {
+        "totalInputLabel": "Total Input Tokens",
+        "totalCachedInputLabel": "Total Cached Input Tokens",
+        "totalCacheWriteLabel": "Total Cache Write Tokens",
+    }
 
 
-def render_live_stat_card(label: str, value: int, value_id: str | None = None) -> str:
+def render_stat_card(label: str, value: int | str, value_id: str | None = None, label_id: str | None = None) -> str:
+  return render_live_stat_card(label, value, value_id=value_id, label_id=label_id)
+
+
+def render_live_stat_card(label: str, value: int | str, value_id: str | None = None, label_id: str | None = None) -> str:
+    label_id_attr = f' id="{html.escape(label_id, quote=True)}"' if label_id else ''
     value_id_attr = f' id="{html.escape(value_id, quote=True)}"' if value_id else ''
     return f"""
               <article class="stat-card">
-                <span class="stat-label">{html.escape(label)}</span>
-                <span class="stat-value"{value_id_attr}>{format_number(value)}</span>
+                <span class="stat-label"{label_id_attr}>{html.escape(label)}</span>
+                <span class="stat-value"{value_id_attr}>{html.escape(format_stat_value(value))}</span>
               </article>"""
 
 
@@ -2195,6 +2381,7 @@ def render_empty_flow_state() -> str:
 
 
 def build_session_snapshot_payload(summary: SessionSummary) -> dict[str, str]:
+  stat_labels = build_summary_stat_labels(summary)
   return {
     "detailMeta": build_session_detail_meta(summary),
     "sessionType": summary.session_type,
@@ -2202,12 +2389,20 @@ def build_session_snapshot_payload(summary: SessionSummary) -> dict[str, str]:
     "status": summary.status,
     "createdLabel": summary.created_label,
     "updatedLabel": summary.updated_label,
+    "totalInputLabel": stat_labels["totalInputLabel"],
+    "totalCachedInputLabel": stat_labels["totalCachedInputLabel"],
+    "totalCacheWriteLabel": stat_labels["totalCacheWriteLabel"],
     "modelTurns": format_number(summary.model_turns),
     "toolCalls": format_number(summary.tool_calls),
     "totalInputTokens": format_number(summary.total_input_tokens),
     "totalOutputTokens": format_number(summary.total_output_tokens),
     "totalCachedInputTokens": format_number(summary.total_cached_input_tokens),
+    "totalCacheWriteTokens": format_number(summary.total_cache_write_tokens),
     "totalTokens": format_number(summary.total_tokens),
+    "estimatedAiCredits": format_ai_credits(summary.estimated_ai_credits),
+    "estimatedCostUsd": format_currency(summary.estimated_cost_usd),
+    "billingNote": summary.billing_note,
+    "modelUsageBreakdownHtml": render_model_usage_breakdown(summary),
     "errorCount": format_number(summary.error_count),
   }
 
@@ -2292,7 +2487,8 @@ def render_empty_log_list() -> str:
 
 
 def build_session_detail_meta(summary: SessionSummary) -> str:
-    return f"Model: {summary.model_name or 'Unknown'} · Repository: {summary.repository or '-'} · Branch: {summary.branch or '-'}"
+    label = "Models" if len(summary.model_usages) > 1 else "Model"
+    return f"{label}: {summary.models_used_label or 'Unknown'} · Repository: {summary.repository or '-'} · Branch: {summary.branch or '-'}"
 
 
 def chat_icon() -> str:
@@ -2303,3 +2499,58 @@ def chat_icon() -> str:
 
 def format_number(value: int) -> str:
     return f"{value:,}"
+
+
+def format_stat_value(value: int | str) -> str:
+    return format_number(value) if isinstance(value, int) else value
+
+
+def format_currency(value: Decimal | None) -> str:
+    if value is None:
+        return "-"
+    return f"${value.quantize(Decimal('0.000001')):,.6f}".rstrip("0").rstrip(".")
+
+
+def format_ai_credits(value: Decimal | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value.quantize(Decimal('0.0001')):,.4f}".rstrip("0").rstrip(".")
+
+
+def render_model_usage_breakdown(summary: SessionSummary) -> str:
+    if not summary.model_usages:
+        return '<div class="model-usage-empty">No per-model usage metrics available yet.</div>'
+
+    rows = "\n".join(
+        f"""
+                  <tr>
+                    <td>{html.escape(item.model_name)}</td>
+                    <td>{format_number(item.input_tokens)}</td>
+                    <td>{format_number(item.cached_input_tokens)}</td>
+                    <td>{format_number(item.cache_write_tokens)}</td>
+                    <td>{format_number(item.output_tokens)}</td>
+                    <td>{format_number(item.total_tokens)}</td>
+                    <td>{html.escape(format_currency(item.estimated_cost_usd))}</td>
+                  </tr>"""
+        for item in summary.model_usages
+    )
+    return f"""
+              <div class="model-usage-title">Model Usage Breakdown</div>
+              <div class="model-usage-scroller">
+                <table class="model-usage-table">
+                  <thead>
+                    <tr>
+                      <th>Model</th>
+                      <th>Input</th>
+                      <th>Cached Input</th>
+                      <th>Cache Write</th>
+                      <th>Output</th>
+                      <th>Total</th>
+                      <th>Est. USD</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows}
+                  </tbody>
+                </table>
+              </div>"""

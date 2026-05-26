@@ -31,6 +31,8 @@ By default the server listens on `http://127.0.0.1:9887` and opens that URL in y
 
 Live updates are pushed over Server-Sent Events and triggered by file-system changes in the session-state directory, so the home, summary, logs, and flow pages update without browser polling.
 
+The summary view also estimates per-session GitHub AI Credits / USD cost from shutdown metrics, aggregating token usage across model switches within the same session.
+
 You can also pass the session-state source and server options:
 
 ```bash
